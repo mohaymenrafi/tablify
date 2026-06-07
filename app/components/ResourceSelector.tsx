@@ -137,9 +137,7 @@ export default function ResourceSelector({
               placeholder="Search pages"
               value={pageQuery}
               onInput={(event) =>
-                setPageQuery(
-                  (event.target as HTMLInputElement).value ?? "",
-                )
+                setPageQuery((event.target as HTMLInputElement).value ?? "")
               }
             />
             {pagesFetcher.state === "loading" ? (
@@ -155,9 +153,7 @@ export default function ResourceSelector({
                   <s-checkbox
                     key={page.id}
                     label={page.title}
-                    checked={draftSelected.some(
-                      (item) => item.id === page.id,
-                    )}
+                    checked={draftSelected.some((item) => item.id === page.id)}
                     onChange={() => togglePage(page)}
                   />
                 ))}

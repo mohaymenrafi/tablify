@@ -1,0 +1,7 @@
+api_version = "2025-10"
+
+[[extensions]]
+type = "theme"
+name = "Tablify"
+handle = "tablify"
+uid = "c6bed0ec-11b9-45dc-f909-8ab48327106f19ddb9dd"

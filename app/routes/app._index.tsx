@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
-import { deleteTable, getTables } from "../models/table.server";
+import { deleteTable, getTable, getTables } from "../models/table.server";
+import { deleteTableMetaobject } from "../models/metaobject.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -11,13 +12,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
 
   if (intent === "delete") {
     const id = formData.get("id");
     if (typeof id === "string") {
+      const existing = await getTable(session.shop, id);
+      if (existing?.metaobjectId) {
+        await deleteTableMetaobject(admin, existing.metaobjectId);
+      }
       await deleteTable(session.shop, id);
     }
   }
@@ -73,8 +78,8 @@ export default function TablesIndex() {
         <s-section heading="No tables yet">
           <s-stack direction="block" gap="base">
             <s-paragraph>
-              Create your first table to display custom content on your store&apos;s
-              pages, collections, or products.
+              Create your first table to display custom content on your
+              store&apos;s pages, collections, or products.
             </s-paragraph>
             <s-box>
               <s-button variant="primary" href="/app/tables/new">
@@ -96,9 +101,12 @@ export default function TablesIndex() {
               {tables.map((table) => (
                 <s-table-row key={table.id}>
                   <s-table-cell>
-                    <s-link href={`/app/tables/${table.id}`}>
-                      {table.name || "Untitled table"}
-                    </s-link>
+                    <s-stack direction="block" gap="small-500">
+                      <s-link href={`/app/tables/${table.id}`}>
+                        {table.name || "Untitled table"}
+                      </s-link>
+                      <s-text color="subdued">ID: {table.id}</s-text>
+                    </s-stack>
                   </s-table-cell>
                   <s-table-cell>
                     <s-stack direction="inline" gap="small-300">
@@ -112,9 +120,7 @@ export default function TablesIndex() {
                     </s-stack>
                   </s-table-cell>
                   <s-table-cell>
-                    {table.type === "gsheet"
-                      ? "Google Sheets"
-                      : "Build Table"}
+                    {table.type === "gsheet" ? "Google Sheets" : "Build Table"}
                   </s-table-cell>
                   <s-table-cell>
                     <s-stack direction="inline" gap="small-300">

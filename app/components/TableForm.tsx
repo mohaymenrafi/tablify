@@ -47,12 +47,12 @@ export default function TableForm({ mode, table, errors }: TableFormProps) {
     googleSheetJson: table?.googleSheetJson ?? "",
   }));
 
-  const update = useCallback(<K extends keyof FormState>(
-    key: K,
-    value: FormState[K],
-  ) => {
-    setState((current) => ({ ...current, [key]: value }));
-  }, []);
+  const update = useCallback(
+    <K extends keyof FormState>(key: K, value: FormState[K]) => {
+      setState((current) => ({ ...current, [key]: value }));
+    },
+    [],
+  );
 
   const handleSubmit = useCallback(() => {
     const payload: Record<string, string> = {
@@ -113,6 +113,15 @@ export default function TableForm({ mode, table, errors }: TableFormProps) {
               update("name", (event.target as HTMLInputElement).value)
             }
           />
+
+          {mode === "edit" && table?.id && (
+            <s-text-field
+              label="Table ID"
+              value={table.id}
+              readOnly
+              details="In the theme editor, add the Tablify block and pick this table from the “Table” list to show it on any page. You can also paste this ID into the block's “Table ID (advanced)” field."
+            />
+          )}
 
           <s-stack direction="block" gap="base">
             <s-text type="strong">Display On</s-text>
@@ -181,9 +190,7 @@ export default function TableForm({ mode, table, errors }: TableFormProps) {
             onChange={(event) =>
               update(
                 "type",
-                (event.target as HTMLSelectElement).value as
-                  | "build"
-                  | "gsheet",
+                (event.target as HTMLSelectElement).value as "build" | "gsheet",
               )
             }
           >
@@ -237,11 +244,7 @@ export default function TableForm({ mode, table, errors }: TableFormProps) {
   );
 }
 
-function JsonFileUpload({
-  onLoaded,
-}: {
-  onLoaded: (content: string) => void;
-}) {
+function JsonFileUpload({ onLoaded }: { onLoaded: (content: string) => void }) {
   const [error, setError] = useState<string | null>(null);
 
   const handleFile = useCallback(

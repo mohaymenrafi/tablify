@@ -80,7 +80,7 @@ export default function TableBuilder({ value, onChange }: TableBuilderProps) {
 
   const removeRow = useCallback(
     (index: number) => {
-      if (rowCount <= 1) return;
+      if (rowCount <= 2) return;
       onChange(grid.filter((_, r) => r !== index));
     },
     [grid, rowCount, onChange],
@@ -141,40 +141,38 @@ export default function TableBuilder({ value, onChange }: TableBuilderProps) {
     setPendingRemoval(null);
   }, [pendingRemoval, removeRow, removeColumn]);
 
-  const handleFile = useCallback(
-    async (file: File) => {
-      setImportError(null);
-      try {
-        const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: "array" });
-        const firstSheet = workbook.SheetNames[0];
-        if (!firstSheet) {
-          setImportError("The file does not contain any sheets.");
-          return;
-        }
-        const sheet = workbook.Sheets[firstSheet];
-        const rows = XLSX.utils.sheet_to_json<string[]>(sheet, {
-          header: 1,
-          blankrows: false,
-          defval: "",
-          raw: false,
-        });
-        const parsed = (rows as unknown as unknown[][]).map((row) =>
-          row.map((cell) => (cell == null ? "" : String(cell))),
-        );
-        if (parsed.length === 0) {
-          setImportError("The file appears to be empty.");
-          return;
-        }
-        setPendingImport(normalizeGrid(parsed));
-      } catch {
-        setImportError(
-          "Could not read this file. Please upload a valid .xls, .xlsx, .csv, or .numbers file.",
-        );
+  const handleFile = useCallback(async (file: File) => {
+    setImportError(null);
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const firstSheet = workbook.SheetNames[0];
+      if (!firstSheet) {
+        setImportError("The file does not contain any sheets.");
+        return;
       }
-    },
-    [],
-  );
+      const sheet = workbook.Sheets[firstSheet];
+      const rows = XLSX.utils.sheet_to_json<string[]>(sheet, {
+        header: 1,
+        blankrows: false,
+        defval: "",
+        raw: false,
+      });
+      const parsed = (rows as unknown as unknown[][]).map((row) =>
+        row.map((cell) => (cell == null ? "" : String(cell))),
+      );
+      if (parsed.length === 0) {
+        setImportError("The file appears to be empty.");
+        return;
+      }
+      setPendingImport(normalizeGrid(parsed));
+      shopify.modal.show(importModalId);
+    } catch {
+      setImportError(
+        "Could not read this file. Please upload a valid .xls, .xlsx, .csv, or .numbers file.",
+      );
+    }
+  }, [importModalId]);
 
   const confirmImport = useCallback(() => {
     if (pendingImport) {
@@ -196,15 +194,12 @@ export default function TableBuilder({ value, onChange }: TableBuilderProps) {
   return (
     <s-stack direction="block" gap="base">
       <s-stack direction="inline" gap="base" alignItems="center">
-        <s-button
-          onClick={() => fileInputRef.current?.click()}
-          icon="import"
-        >
+        <s-button onClick={() => fileInputRef.current?.click()} icon="import">
           Import table file
         </s-button>
         <s-text color="subdued">
-          Upload .xls, .xlsx, .csv, or .numbers. This replaces the current
-          table content.
+          Upload .xls, .xlsx, .csv, or .numbers. This replaces the current table
+          content.
         </s-text>
         <input
           ref={fileInputRef}
@@ -258,28 +253,39 @@ export default function TableBuilder({ value, onChange }: TableBuilderProps) {
                       handleDrop();
                     }}
                   >
-                    <div style={handleInnerStyle}>
-                      <span
-                        draggable
-                        title="Drag to reorder column"
-                        onDragStart={() => setDrag({ type: "col", index: c })}
-                        onDragEnd={handleDrop}
-                        style={dragHandleStyle}
-                      >
-                        ⠿
-                      </span>
-                      <button
-                        type="button"
-                        title="Remove column"
-                        aria-label={`Remove column ${c + 1}`}
-                        style={removeButtonStyle}
-                        onClick={() =>
-                          setPendingRemoval({ type: "col", index: c })
-                        }
-                        disabled={colCount <= 1}
-                      >
-                        ×
-                      </button>
+                    <div style={headerCellStyle}>
+                      <div style={handleInnerStyle}>
+                        <span
+                          draggable
+                          title="Drag to reorder column"
+                          onDragStart={() => setDrag({ type: "col", index: c })}
+                          onDragEnd={handleDrop}
+                          style={dragHandleStyle}
+                        >
+                          ⠿
+                        </span>
+                        <button
+                          type="button"
+                          title="Remove column"
+                          aria-label={`Remove column ${c + 1}`}
+                          style={removeButtonStyle}
+                          onClick={() => {
+                            setPendingRemoval({ type: "col", index: c });
+                            shopify.modal.show(removeModalId);
+                          }}
+                          disabled={colCount <= 1}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={grid[0]?.[c] ?? ""}
+                        placeholder={`Header ${c + 1}`}
+                        aria-label={`Column ${c + 1} header`}
+                        onChange={(event) => setCell(0, c, event.target.value)}
+                        style={headerInputStyle}
+                      />
                     </div>
                   </th>
                 );
@@ -298,7 +304,8 @@ export default function TableBuilder({ value, onChange }: TableBuilderProps) {
             </tr>
           </thead>
           <tbody>
-            {grid.map((row, r) => {
+            {grid.slice(1).map((row, bodyIndex) => {
+              const r = bodyIndex + 1;
               const isRowDropTarget =
                 dropTarget?.type === "row" && dropTarget.index === r;
               return (
@@ -332,12 +339,13 @@ export default function TableBuilder({ value, onChange }: TableBuilderProps) {
                       <button
                         type="button"
                         title="Remove row"
-                        aria-label={`Remove row ${r + 1}`}
+                        aria-label={`Remove row ${r}`}
                         style={removeButtonStyle}
-                        onClick={() =>
-                          setPendingRemoval({ type: "row", index: r })
-                        }
-                        disabled={rowCount <= 1}
+                        onClick={() => {
+                          setPendingRemoval({ type: "row", index: r });
+                          shopify.modal.show(removeModalId);
+                        }}
+                        disabled={rowCount <= 2}
                       >
                         ×
                       </button>
@@ -355,8 +363,8 @@ export default function TableBuilder({ value, onChange }: TableBuilderProps) {
                   ))}
                   <td style={spacerCellStyle} />
                 </tr>
-              );
-            })}
+                );
+              })}
             <tr>
               <td style={addRowCellStyle}>
                 <button
@@ -376,7 +384,8 @@ export default function TableBuilder({ value, onChange }: TableBuilderProps) {
       </div>
 
       <s-text color="subdued">
-        {rowCount} rows × {colCount} columns
+        {Math.max(rowCount - 1, 0)} rows × {colCount} columns (plus a header
+        row)
       </s-text>
 
       <s-modal id={removeModalId} heading="Remove confirmation">
@@ -428,29 +437,8 @@ export default function TableBuilder({ value, onChange }: TableBuilderProps) {
           Cancel
         </s-button>
       </s-modal>
-
-      {/* Programmatically open the import confirmation once a file is parsed */}
-      {pendingImport && (
-        <AutoOpenModal modalId={importModalId} />
-      )}
-      {/* Programmatically open the remove confirmation when a removal is staged */}
-      {pendingRemoval && <AutoOpenModal modalId={removeModalId} />}
     </s-stack>
   );
-}
-
-function AutoOpenModal({ modalId }: { modalId: string }) {
-  const ref = useRef(false);
-  if (!ref.current && typeof document !== "undefined") {
-    ref.current = true;
-    requestAnimationFrame(() => {
-      const modal = document.getElementById(modalId) as
-        | (HTMLElement & { show?: () => void })
-        | null;
-      modal?.show?.();
-    });
-  }
-  return null;
 }
 
 const borderColor = "var(--s-color-border, #c9cccf)";
@@ -470,6 +458,24 @@ const cellInputStyle: React.CSSProperties = {
   padding: "8px 10px",
   font: "inherit",
   background: "transparent",
+};
+
+const headerCellStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+};
+
+const headerInputStyle: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  border: `1px solid ${borderColor}`,
+  borderRadius: 4,
+  outline: "none",
+  padding: "6px 8px",
+  font: "inherit",
+  fontWeight: 600,
+  background: "var(--s-color-bg-surface, #ffffff)",
 };
 
 const cornerCellStyle: React.CSSProperties = {

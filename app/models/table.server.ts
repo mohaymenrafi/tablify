@@ -41,6 +41,7 @@ function deserialize(record: {
   tableData: string;
   googleSheetUrl: string;
   googleSheetJson: string;
+  metaobjectId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -58,6 +59,7 @@ function deserialize(record: {
     tableData: safeParse<string[][]>(record.tableData, []),
     googleSheetUrl: record.googleSheetUrl,
     googleSheetJson: record.googleSheetJson,
+    metaobjectId: record.metaobjectId,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -76,6 +78,88 @@ export async function getTables(shop: string) {
 export async function getTable(shop: string, id: string) {
   const record = await prisma.tableConfig.findFirst({ where: { id, shop } });
   return record ? deserialize(record) : null;
+}
+
+/**
+ * Extracts the trailing numeric id from a Shopify GID
+ * (e.g. "gid://shopify/Product/123" -> "123").
+ */
+function numericIdOf(gid: string): string {
+  const match = /(\d+)\s*$/.exec(gid);
+  return match ? match[1] : gid;
+}
+
+export type StorefrontResourceType = "product" | "collection" | "page";
+
+export interface PublicTable {
+  id: string;
+  name: string;
+  type: "build" | "gsheet";
+  tableData: string[][];
+  googleSheetUrl: string;
+}
+
+/**
+ * Returns the tables that should be displayed for a given storefront resource.
+ * Matching is done by the numeric id so it works regardless of GID prefix.
+ * Note: `googleSheetJson` is intentionally never exposed to the storefront.
+ */
+export async function getTablesForResource(
+  shop: string,
+  type: StorefrontResourceType,
+  resourceId: string,
+): Promise<PublicTable[]> {
+  const target = numericIdOf(resourceId);
+  const tables = await getTables(shop);
+
+  return tables
+    .filter((table) => {
+      const enabled =
+        type === "product"
+          ? table.displayProducts
+          : type === "collection"
+            ? table.displayCollections
+            : table.displayPages;
+      if (!enabled) return false;
+
+      const list =
+        type === "product"
+          ? table.products
+          : type === "collection"
+            ? table.collections
+            : table.pages;
+
+      return list.some((item) => numericIdOf(item.id) === target);
+    })
+    .map((table) => ({
+      id: table.id,
+      name: table.name,
+      type: table.type,
+      tableData: table.tableData,
+      googleSheetUrl: table.googleSheetUrl,
+    }));
+}
+
+/**
+ * Returns a single table by its id, regardless of the resource it is assigned
+ * to. Used when a merchant pins a specific table to the Tablify block via its
+ * Table ID setting, so the table can be shown on any template.
+ * Note: `googleSheetJson` is intentionally never exposed to the storefront.
+ */
+export async function getPublicTableById(
+  shop: string,
+  id: string,
+): Promise<PublicTable | null> {
+  const record = await prisma.tableConfig.findFirst({ where: { id, shop } });
+  if (!record) return null;
+  const table = deserialize(record);
+  return {
+    id: table.id,
+    name: table.name,
+    type: table.type,
+    tableData: table.tableData,
+    googleSheetUrl: table.googleSheetUrl,
+  };
 }
 
 function serialize(data: TableConfigData) {
@@ -119,6 +203,20 @@ export async function deleteTable(shop: string, id: string) {
   await prisma.tableConfig.deleteMany({ where: { id, shop } });
 }
 
+/**
+ * Stores the GID of the mirrored Shopify metaobject entry on the table record.
+ */
+export async function setTableMetaobjectId(
+  shop: string,
+  id: string,
+  metaobjectId: string | null,
+) {
+  await prisma.tableConfig.updateMany({
+    where: { id, shop },
+    data: { metaobjectId },
+  });
+}
+
 export interface ParsedForm {
   data: TableConfigData;
   errors: Record<string, string>;
@@ -157,14 +255,15 @@ export function parseTableForm(formData: FormData): ParsedForm {
     [],
   );
 
-  const googleSheetUrl =
-    ((formData.get("googleSheetUrl") as string | null) ?? "").trim();
-  const googleSheetJson =
-    ((formData.get("googleSheetJson") as string | null) ?? "").trim();
+  const googleSheetUrl = (
+    (formData.get("googleSheetUrl") as string | null) ?? ""
+  ).trim();
+  const googleSheetJson = (
+    (formData.get("googleSheetJson") as string | null) ?? ""
+  ).trim();
 
   if (type === "gsheet" && !googleSheetUrl && !googleSheetJson) {
-    errors.gsheet =
-      "Provide a Google Spreadsheet URL or a JSON configuration";
+    errors.gsheet = "Provide a Google Spreadsheet URL or a JSON configuration";
   }
 
   return {
@@ -184,4 +283,3 @@ export function parseTableForm(formData: FormData): ParsedForm {
     errors,
   };
 }
-

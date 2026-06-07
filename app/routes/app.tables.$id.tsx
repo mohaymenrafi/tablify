@@ -1,7 +1,13 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
-import { getTable, parseTableForm, updateTable } from "../models/table.server";
+import {
+  getTable,
+  parseTableForm,
+  setTableMetaobjectId,
+  updateTable,
+} from "../models/table.server";
+import { syncTableMetaobject } from "../models/metaobject.server";
 import TableForm from "../components/TableForm";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
@@ -14,7 +20,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const id = params.id as string;
   const formData = await request.formData();
   const { data: parsed, errors } = parseTableForm(formData);
 
@@ -22,7 +29,17 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     return { errors };
   }
 
-  await updateTable(session.shop, params.id as string, parsed);
+  const existing = await getTable(session.shop, id);
+  await updateTable(session.shop, id, parsed);
+
+  const metaobjectId = await syncTableMetaobject(
+    admin,
+    { tableId: id, name: parsed.name },
+    existing?.metaobjectId ?? null,
+  );
+  if (metaobjectId && metaobjectId !== existing?.metaobjectId) {
+    await setTableMetaobjectId(session.shop, id, metaobjectId);
+  }
   return redirect("/app");
 };
 

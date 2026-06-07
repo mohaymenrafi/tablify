@@ -1,0 +1,93 @@
+{%- comment -%}
+  Tablify app block.
+  Renders any tables that the merchant has assigned to the current
+  product, collection, or page. Data is loaded client-side from the
+  app proxy (/apps/tablify/table) so it always reflects the latest config.
+{%- endcomment -%}
+
+{%- liquid
+  assign resource_type = ''
+  assign resource_id = ''
+  assign table_id = ''
+
+  if block.settings.table != blank
+    assign table_id = block.settings.table.table_id.value
+  endif
+
+  if table_id == blank
+    assign table_id = block.settings.table_id | strip
+  endif
+
+  if product != blank
+    assign resource_type = 'product'
+    assign resource_id = product.id
+  elsif collection != blank
+    assign resource_type = 'collection'
+    assign resource_id = collection.id
+  elsif page != blank
+    assign resource_type = 'page'
+    assign resource_id = page.id
+  endif
+-%}
+
+<div
+  class="tablify-block"
+  data-tablify
+  data-table-id="{{ table_id }}"
+  data-resource-type="{{ resource_type }}"
+  data-resource-id="{{ resource_id }}"
+  data-proxy-url="{{ shop.url }}/apps/tablify/table"
+  data-show-heading="{{ block.settings.show_heading }}"
+  style="--tablify-max-width: {{ block.settings.max_width }}px;"
+  {{ block.shopify_attributes }}
+>
+  {%- if table_id == blank and resource_type == blank -%}
+    <p class="tablify-block__notice">
+      {{ 'tablify.unsupported_template' | t }}
+    </p>
+  {%- else -%}
+    <div class="tablify-block__status" data-tablify-status>
+      {{ 'tablify.loading' | t }}
+    </div>
+  {%- endif -%}
+</div>
+
+{% schema %}
+{
+  "name": "Tablify table",
+  "target": "section",
+  "stylesheet": "tablify.css",
+  "javascript": "tablify.js",
+  "settings": [
+    {
+      "type": "metaobject",
+      "id": "table",
+      "label": "Table",
+      "metaobject_type": "app--378308395009--tablify_table",
+      "info": "Select a table created in the Tablify app. Showing it here works on any page, including headers and footers."
+    },
+    {
+      "type": "text",
+      "id": "table_id",
+      "label": "Table ID (advanced)",
+      "info": "Optional fallback. Only used if no table is selected above. Paste a table's ID from the Tablify app."
+    },
+    {
+      "type": "checkbox",
+      "id": "show_heading",
+      "label": "Show table name as heading",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "max_width",
+      "label": "Maximum width",
+      "min": 320,
+      "max": 1200,
+      "step": 20,
+      "unit": "px",
+      "default": 1000
+    }
+  ]
+}
+{% endschema %}
