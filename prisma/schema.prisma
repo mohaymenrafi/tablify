@@ -32,3 +32,26 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model TableConfig {
+  id                 String   @id @default(cuid())
+  shop               String
+  name               String
+  displayPages       Boolean  @default(false)
+  displayCollections Boolean  @default(false)
+  displayProducts    Boolean  @default(false)
+  // JSON-encoded arrays of selected resources: [{ id, title }]
+  pages              String   @default("[]")
+  collections        String   @default("[]")
+  products           String   @default("[]")
+  // "build" (manual grid) or "gsheet" (Google Sheets)
+  type               String   @default("build")
+  // JSON-encoded 2D array of cell strings for the manual grid
+  tableData          String   @default("[]")
+  googleSheetUrl     String   @default("")
+  googleSheetJson    String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([shop])
+}
